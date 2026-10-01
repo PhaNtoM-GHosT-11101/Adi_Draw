@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Adi Draw</title>
+    <script>
+      // GitHub Pages serves this for unknown paths. Everything is a single-page
+      // app, so remember where the visitor was headed and hand it back.
+      sessionStorage.setItem('adi-draw:redirect', location.pathname + location.search + location.hash)
+      location.replace('./')
+    </script>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+             font: 15px/1.6 -apple-system, 'Segoe UI', system-ui, sans-serif; color: #5a6577 }
+    </style>
+  </head>
+  <body><a href="./">Adi Draw</a></body>
+</html>
