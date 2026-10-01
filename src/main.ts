@@ -115,6 +115,8 @@ class App {
       onPickShortcut: (tool) => this.recordShortcut(tool),
       onNewPreset: (tool) => this.newToolPreset(tool),
       onRecentsChange: (r) => writeJson(RECENTS_KEY, r),
+      canInkToShape: () => this.controller.canInkToShape(),
+      inkToShape: () => this.applyInkToShape(),
     })
 
     this.boardPanel = new BoardPanel(
@@ -181,6 +183,11 @@ class App {
         this.layers.render()
         this.renderStatus()
       }
+      // the tool panel offers "Ink to shape" based on what is selected, so it
+      // has to follow selection changes as well as tool changes
+      if (kinds.has('selection')) this.inspector.render()
+      // every board control reads meta back out, so the panel must follow it
+      if (kinds.has('doc')) this.boardPanel.render()
     })
     this.toolStore.subscribe(() => {
       this.applyTheme()
@@ -188,6 +195,16 @@ class App {
       this.store.markAllDirty()
       this.requestFrame()
     })
+  }
+
+  /**
+   * The converted result is a shape, not ink, so the tool panel has to
+   * re-read the selection or the button would linger after it is done.
+   */
+  private applyInkToShape() {
+    if (!this.controller.inkToShape()) return
+    this.requestFrame()
+    this.inspector.render()
   }
 
   /* ----------------------------- layout --------------------------- */
@@ -356,6 +373,7 @@ class App {
         deleteSelection: () => this.controller.deleteSelection(),
         selectAll: () => this.controller.selectAll(),
         duplicate: () => this.controller.duplicateSelection(),
+        inkToShape: () => this.applyInkToShape(),
         copy: () => this.copySelection(),
         cut: () => {
           this.copySelection()

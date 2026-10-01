@@ -28,6 +28,20 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node
 }
 
+const ICON_MAP = ICONS as Record<string, string>
+
+/**
+ * Callers hand over either an ICONS key ('help') or literal path data
+ * ('M4 20l…'), because a Tool carries its icon as resolved path data while the
+ * chrome uses keys. Resolving only keys made every tool icon fall back to the
+ * pen, so the whole rail drew the same glyph.
+ */
+function resolveIcon(name: string): string {
+  const hit = ICON_MAP[name]
+  if (hit) return hit
+  return /^[\sMmLlHhVvCcSsQqTtAaZz]/.test(name) ? name : ICON_MAP.pen
+}
+
 export function svgIcon(name: keyof typeof ICONS | string, size = 20, stroke = 1.7): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('viewBox', '0 0 24 24')
@@ -40,7 +54,7 @@ export function svgIcon(name: keyof typeof ICONS | string, size = 20, stroke = 1
   svg.setAttribute('stroke-linejoin', 'round')
   svg.classList.add('icon')
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  p.setAttribute('d', (ICONS as Record<string, string>)[name] ?? ICONS.pen)
+  p.setAttribute('d', resolveIcon(name))
   svg.append(p)
   return svg
 }

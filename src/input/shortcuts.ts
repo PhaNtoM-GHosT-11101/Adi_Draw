@@ -6,6 +6,7 @@ export interface ShortcutHandlers {
   undo: () => void
   redo: () => void
   deleteSelection: () => void
+  inkToShape: () => void
   selectAll: () => void
   duplicate: () => void
   copy: () => void
@@ -102,6 +103,11 @@ export function installShortcuts(
           if (typing) return
           e.preventDefault()
           h.duplicate()
+          return
+        case 'Ctrl+Shift+K':
+          if (typing) return
+          e.preventDefault()
+          h.inkToShape()
           return
         case 'Ctrl+C':
           if (typing) return

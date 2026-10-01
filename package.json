@@ -12,7 +12,7 @@
     "desktop": "concurrently -k \"vite\" \"wait-on tcp:5273 && electron .\"",
     "desktop:build": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "test": "npm run typecheck && node test/smoke.mjs && node test/ui-check.mjs && node test/incremental.mjs && node test/preview.mjs && node test/pens.mjs && node test/theme.mjs",
+    "test": "npm run typecheck && node test/smoke.mjs && node test/ui-check.mjs && node test/incremental.mjs && node test/preview.mjs && node test/pens.mjs && node test/recognise.mjs && node test/inkshape.mjs && node test/theme.mjs",
     "test:visual": "node test/visual.mjs",
     "test:svg": "node test/svg-check.mjs",
     "typecheck": "tsc --noEmit",

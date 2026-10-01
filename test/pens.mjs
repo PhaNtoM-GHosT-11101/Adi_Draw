@@ -115,31 +115,47 @@ const strokeStats = (toolId, y) =>
       const raf = () => new Promise((r) => requestAnimationFrame(r))
       ev('pointerdown', 140, 0.5)
       for (let i = 1; i <= 80; i++) {
-        ev('pointermove', 140 + (i / 80) * 520, 0.5 + 0.4 * Math.sin((i / 80) * Math.PI))
+        ev('pointermove', 140 + (i / 80) * 520, y, 0.5 + 0.4 * Math.sin((i / 80) * Math.PI))
         await raf()
       }
       ev('pointerup', 660, 0)
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
 
-      const d = g.getImageData(0, row, c.width, 1).data
-      const dist = (px) => {
-        const k = px * 4
+      const INK = 25
+      const distOf = (d, x) => {
+        const k = x * 4
         return Math.abs(d[k] - ref[0]) + Math.abs(d[k + 1] - ref[1]) + Math.abs(d[k + 2] - ref[2])
       }
-      const INK = 25
-      let first = -1
-      let last = -1
-      for (let px = 0; px < c.width; px++)
-        if (dist(px) > INK) {
-          if (first < 0) first = px
-          last = px
-        }
-      if (first < 0) return { empty: true, cv: 0, runs: 0, span: 0, mean: 0 }
 
-      const vals = []
-      for (let px = first; px <= last; px++) vals.push(dist(px))
-      const mean = vals.reduce((a, b) => a + b, 0) / vals.length
-      const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length
+      // One pixel row is a weak estimator of a stochastic grain tile: the same
+      // stroke can read 0.1 or 0.5 depending on where the tile happens to line
+      // up under it, because the smoothed path is timing-dependent. Pool the
+      // rows the stroke really covers so the measurement has some signal --
+      // but only rows at least as dense as the core, or the anti-aliased
+      // edges would drag the mean down and flatten the variance with them.
+      const rows = []
+      for (const ry of [y - 8, y, y + 8]) {
+        if (ry < 0 || ry >= c.height) continue
+        const d = g.getImageData(0, Math.round(ry), c.width, 1).data
+        let first = -1
+        let last = -1
+        for (let px = 0; px < c.width; px++) {
+          if (distOf(d, px) > INK) {
+            if (first < 0) first = px
+            last = px
+          }
+        }
+        if (first < 0) continue
+        const rv = []
+        for (let px = first; px <= last; px++) rv.push(distOf(d, px))
+        rows.push({ vals: rv, mean: rv.reduce((a, b2) => a + b2, 0) / rv.length })
+      }
+      if (!rows.length) return { empty: true, cv: 0, runs: 0, span: 0, mean: 0 }
+
+      const core = rows.reduce((a, b2) => (b2.mean > a.mean ? b2 : a)).mean
+      const vals = rows.filter((r) => r.mean >= core * 0.7).flatMap((r) => r.vals)
+      const mean = vals.reduce((a, b2) => a + b2, 0) / vals.length
+      const variance = vals.reduce((a, b2) => a + (b2 - mean) ** 2, 0) / vals.length
       const cv = mean > 0 ? Math.sqrt(variance) / mean : 0
       let dips = 0
       let runs = 0
@@ -155,6 +171,70 @@ const strokeStats = (toolId, y) =>
       }
       if (run) runs++
       return { empty: false, cv, dips, runs, span: vals.length, mean: Math.round(mean) }
+    },
+    [toolId, y],
+  )
+
+/* Bristles are directional: the streaks run *along* the stroke, so a scan row
+   travelling with them samples the gaps almost never and reads far too smooth.
+   A vertical slice crosses every streak, which is what the eye actually sees.
+   The horizontal numbers still hold for the grain/chalk surfaces, which are
+   isotropic, so only the brush is measured this way. */
+const bristleStats = (toolId, y) =>
+  page.evaluate(
+    async ([toolId, y]) => {
+      window.adiDraw.tools.setActive(toolId)
+      const c = document.querySelector('canvas.board')
+      const b = c.getBoundingClientRect()
+      const g = c.getContext('2d')
+      const ref = (() => {
+        const p = g.getImageData(Math.round(c.width / 2), 8, 1, 1).data
+        return [p[0], p[1], p[2]]
+      })()
+      const ev = (t, x, p) =>
+        c.dispatchEvent(
+          new PointerEvent(t, {
+            pointerId: 1, pointerType: 'pen', isPrimary: true, bubbles: true, cancelable: true,
+            clientX: b.left + x, clientY: b.top + y, pressure: p, tiltX: 20, tiltY: -8,
+            buttons: t === 'pointerup' ? 0 : 1, button: 0,
+          }),
+        )
+      const raf = () => new Promise((r) => requestAnimationFrame(r))
+      ev('pointerdown', 140, 0.5)
+      for (let i = 1; i <= 80; i++) {
+        ev('pointermove', 140 + (i / 80) * 520, y, 0.5 + 0.4 * Math.sin((i / 80) * Math.PI))
+        await raf()
+      }
+      ev('pointerup', 660, 0)
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+
+      const INK = 25
+      const dOf = (d, i) =>
+        Math.abs(d[i] - ref[0]) + Math.abs(d[i + 1] - ref[1]) + Math.abs(d[i + 2] - ref[2])
+      const vals = []
+      for (let x = 200; x <= 600; x += 10) {
+        const col = g.getImageData(x, 0, 1, c.height).data
+        let first = -1
+        let last = -1
+        for (let py = 0; py < c.height; py++) {
+          if (dOf(col, py * 4) > INK) {
+            if (first < 0) first = py
+            last = py
+          }
+        }
+        if (first < 0) continue
+        for (let py = first; py <= last; py++) vals.push(dOf(col, py * 4))
+      }
+      if (!vals.length) return { empty: true, cv: 0, runs: 0, span: 0, mean: 0 }
+      const mean = vals.reduce((a, b2) => a + b2, 0) / vals.length
+      const variance = vals.reduce((a, b2) => a + (b2 - mean) ** 2, 0) / vals.length
+      return {
+        empty: false,
+        cv: mean > 0 ? Math.sqrt(variance) / mean : 0,
+        runs: 0,
+        span: vals.length,
+        mean: Math.round(mean),
+      }
     },
     [toolId, y],
   )
@@ -188,7 +268,7 @@ check(
   `variation ${chalk.cv.toFixed(3)}`,
 )
 
-const brush = await strokeStats('brush', 400)
+const brush = await bristleStats('brush', 400)
 check('a paint brush is drawn', !brush.empty, brush.empty ? 'nothing on the row' : `${brush.span} px`)
 check(
   'a paint brush shows its bristles',

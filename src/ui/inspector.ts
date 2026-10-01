@@ -1,4 +1,4 @@
-import type { ShapeKind, TextureKind, Tool, ToolCategory } from '../core/types'
+import type { DocMeta, ShapeKind, TextureKind, Tool, ToolCategory } from '../core/types'
 import type { ToolStore } from '../core/app'
 import { BLEND_MODES, FONT_FAMILIES, FONT_WEIGHTS, ICONS, NOTE_COLORS, PALETTE, makeTool } from '../core/tools'
 import { el, clear, section, slider, toggle, select, colorRow, button, svgIcon, normaliseHex } from './dom'
@@ -30,6 +30,9 @@ const SHAPE_KINDS: { value: ShapeKind; label: string; icon: string }[] = [
 
 export interface InspectorHooks {
   onChange: () => void
+  /** offered only when a single stroke is selected and it reads as a shape */
+  canInkToShape?: () => boolean
+  inkToShape?: () => void
   onPickShortcut: (tool: Tool) => void
   onNewPreset: (tool: Tool) => void
   onRecentsChange: (recents: string[]) => void
@@ -70,6 +73,13 @@ export class Inspector {
     clear(this.body)
     if (!tool) return
     this.body.append(this.header(tool))
+    if (tool.category === 'select' && this.hooks.canInkToShape?.()) {
+      const b = button('Ink to shape', () => this.hooks.inkToShape?.(), { icon: ICONS.inkToShape })
+      this.body.append(section('Selection', [b, el('p', {
+        class: 'hint',
+        text: 'Snaps the selected stroke to the line, rectangle, ellipse, triangle or diamond it was aiming at.',
+      })]))
+    }
     this.body.append(this.colorSection(tool))
     if (tool.category !== 'select' && tool.category !== 'image')
       this.body.append(this.strokeSection(tool))
@@ -797,18 +807,73 @@ function curveLabel(gamma: number) {
   return 'very light'
 }
 
+/** Paper styles, each drawn as a real miniature of what it puts on the board. */
+const PAPERS: { value: DocMeta['canvasStyle']; label: string }[] = [
+  { value: 'infinite', label: 'Blank' },
+  { value: 'lines', label: 'Grid' },
+  { value: 'ruled', label: 'Ruled' },
+  { value: 'dots', label: 'Dots' },
+]
+
+function paperPreview(value: DocMeta['canvasStyle'], ink: string): SVGElement {
+  const ns = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(ns, 'svg')
+  svg.setAttribute('viewBox', '0 0 40 26')
+  svg.setAttribute('class', 'paper-thumb')
+  svg.setAttribute('aria-hidden', 'true')
+  const line = (x1: number, y1: number, x2: number, y2: number) => {
+    const l = document.createElementNS(ns, 'line')
+    l.setAttribute('x1', String(x1)); l.setAttribute('y1', String(y1))
+    l.setAttribute('x2', String(x2)); l.setAttribute('y2', String(y2))
+    l.setAttribute('stroke', ink); l.setAttribute('stroke-width', '1')
+    svg.appendChild(l)
+  }
+  const dot = (x: number, y: number) => {
+    const c = document.createElementNS(ns, 'circle')
+    c.setAttribute('cx', String(x)); c.setAttribute('cy', String(y))
+    c.setAttribute('r', '1'); c.setAttribute('fill', ink)
+    svg.appendChild(c)
+  }
+  if (value === 'lines') {
+    for (let x = 4; x <= 36; x += 8) line(x, 0, x, 26)
+    for (let y = 4; y <= 22; y += 6) line(0, y, 40, y)
+  } else if (value === 'ruled') {
+    for (let y = 4; y <= 22; y += 6) line(0, y, 40, y)
+  } else if (value === 'dots') {
+    for (let y = 4; y <= 22; y += 6) for (let x = 4; x <= 36; x += 8) dot(x, y)
+  }
+  return svg
+}
+
+function paperRow(current: DocMeta['canvasStyle'], onPick: (v: DocMeta['canvasStyle']) => void) {
+  const wrap = el('div', { class: 'paper-row' })
+  for (const p of PAPERS) {
+    const b = el(
+      'button',
+      { class: 'paper-chip' + (p.value === current ? ' is-active' : ''), type: 'button', title: p.label },
+      [paperPreview(p.value, 'currentColor')],
+    )
+    b.appendChild(el('span', { text: p.label }))
+    b.addEventListener('click', () => onPick(p.value))
+    wrap.appendChild(b)
+  }
+  return wrap
+}
+
 export interface BoardHooks {
   onChange: () => void
 }
 
 export class BoardPanel {
   readonly root: HTMLElement
+  private body: HTMLElement
+  private lastSig = ''
 
   constructor(
     private getMeta: () => {
       title: string
       background: string
-      canvasStyle: 'infinite' | 'grid' | 'dots' | 'lines'
+      canvasStyle: 'infinite' | 'grid' | 'dots' | 'lines' | 'ruled'
       gridSize: number
       gridColor: string
       showGrid: boolean
@@ -818,11 +883,31 @@ export class BoardPanel {
     private store: ToolStore,
     private hooks: BoardHooks,
   ) {
-    const m = this.getMeta()
+    this.body = el('div', { class: 'panel-body' })
     this.root = el('aside', { class: 'panel', 'data-panel': 'board' }, [
       el('div', { class: 'panel-head' }, [el('h2', { text: 'Board' })]),
-      el('div', { class: 'panel-body' }, [
-        section('Appearance', [
+      this.body,
+    ])
+    this.render()
+  }
+
+  /**
+   * Rebuild the panel from the current meta.
+   *
+   * Without this every control here would be write-only: patching the paper or
+   * the theme would change the board but leave the swatch showing the old
+   * choice, because nothing re-read the values.
+   */
+  render() {
+    const m = this.getMeta()
+    // 'doc' fires on every stroke; rebuilding this panel each time would be
+    // pure waste, so only redraw when a value the panel shows has moved
+    const sig = JSON.stringify([m, this.store.settings])
+    if (sig === this.lastSig) return
+    this.lastSig = sig
+    clear(this.body)
+    this.body.append(
+      section('Appearance', [
           colorRow('Background', m.background, (v) => this.patchMeta({ background: v })),
           el('div', { class: 'bg-presets' },
             ['#ffffff', '#fbfbfd', '#f4f6fb', '#1e293b', '#0f172a', '#fdf6e3'].map((c) => {
@@ -840,19 +925,10 @@ export class BoardPanel {
             this.patchMeta({ showGrid: v })
             this.hooks.onChange()
           }),
-          select(
-            'Style',
-            m.canvasStyle,
-            [
-              { label: 'Infinite', value: 'infinite' },
-              { label: 'Dots', value: 'dots' },
-              { label: 'Lines', value: 'lines' },
-            ],
-            (v) => {
-              this.patchMeta({ canvasStyle: v })
-              this.hooks.onChange()
-            },
-          ),
+          paperRow(m.canvasStyle, (v) => {
+            this.patchMeta({ canvasStyle: v })
+            this.hooks.onChange()
+          }),
           slider('Cell size', m.gridSize, 4, 200, 1, (v) => this.patchMeta({ gridSize: v }), {
             format: (v) => `${Math.round(v)} px`,
           }),
@@ -906,8 +982,7 @@ export class BoardPanel {
           }, 'Ignore finger touches while a stylus has been used recently'),
           toggle('Autosave', this.store.settings.autosave, (v) => this.store.patchSettings({ autosave: v })),
         ]),
-      ]),
-    ])
+    )
   }
 }
 

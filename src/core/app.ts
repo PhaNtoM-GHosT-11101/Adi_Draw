@@ -119,7 +119,7 @@ export class ToolStore {
   }
 
   create(from?: Tool, overrides: Partial<Tool> = {}): Tool {
-    const base = from ? structuredClone(from) : makeTool({ id: '', name: '', category: 'freehand', icon: ICONS.pen })
+    const base = from ? structuredClone(from) : makeTool({ id: '', name: '', category: 'freehand', icon: ICONS.pencil })
     const tool: Tool = {
       ...base,
       ...overrides,

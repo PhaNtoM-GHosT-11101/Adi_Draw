@@ -25,6 +25,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ['Rotate', 'Drag the handle above the box (Shift = 15° steps)'],
       ['Nudge', 'Arrow keys (Shift = 10 px)'],
       ['Duplicate', 'Ctrl + D or F2'],
+      ['Snap ink to a shape', 'Ctrl + Shift + K'],
       ['Delete', 'Delete / Backspace'],
     ],
   },

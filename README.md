@@ -181,6 +181,33 @@ the fountain pen or a bristle finish on a marker. Two controls:
 **Erasing** — Ink eraser (rubs out pixels, like eraser on paper) and
 whole-object eraser (removes the whole stroke)
 
+### Ink to shape
+
+Draw a rectangle badly on purpose and Adi Draw can still tell what you meant.
+Select the stroke — with the Select tool — and press `Ctrl+Shift+K`, or use the
+**Ink to shape** button in the tool panel. The stroke is scored against ideal
+line, rectangle, ellipse, triangle and diamond outlines and swapped for the
+closest one.
+
+Two things make it behave rather than misfire:
+
+- Ink is compared in **arc-length space** at every start offset and in both
+  winding directions, so it does not matter where the pen started or which way
+  it went round.
+- The score is normalised by the shape's own diagonal, so the same tolerance
+  applies to a 20 px doodle and a 600 px diagram.
+
+It only fires when the match is genuinely close, so a scribble is left alone.
+The stroke keeps its id, layer and style, so the result stays selected and a
+single undo puts the ink back exactly as it was.
+
+### Paper
+
+The board panel offers four surfaces, each drawn as a miniature of what it puts
+down: **Blank**, **Grid** (cross-hatch), **Ruled** (notebook rules, horizontal
+only) and **Dots**. Cell size, rule colour and grid snapping apply to all of
+them.
+
 Right-click any tool to jump straight to its setup. **Duplicate** to keep the
 original and tweak a copy, **Apply to all** to push a style onto every tool of
 that kind, **In toolbar** to hide one you never use. Presets save themselves.
@@ -253,7 +280,7 @@ switch between a light and dark UI — or leave it on *Match system*.
 ## Testing
 
 ```bash
-npm test               # typecheck + 104 checks across 6 browser suites
+npm test               # typecheck + 150 checks across 8 browser suites
 npm run perf           # renderer timings on a 4 000-object board
 npm run test:visual    # draws a sample board to test/board.png
 npm run test:svg       # exports an SVG and re-renders it to verify it
@@ -275,6 +302,21 @@ assert behaviour, not implementation:
 - the dark theme follows the OS and an explicit choice overrides it
 - every pen exists, and a textured stroke is measurably clumpier than a smooth one
 - the published build boots, draws, survives a reload and exports
+- ink-to-shape reads a hand-drawn rectangle, ellipse and triangle correctly,
+  survives the start vertex and winding direction changing, refuses a scribble,
+  and one undo puts the original ink back
+- ruled paper is crossed by a vertical scan many times and a horizontal scan
+  almost never
+
+### A note on measuring texture
+
+The surface checks do not use brightness thresholds. A red crayon pixel reads
+as "light" to any brightness test, and a dark crayon on a dark board reads as
+solid either way; what separates textured ink from smooth ink is the
+*variance* of density along it. Bristles are directional, so a scan row
+travelling with the streaks barely crosses them — the brush is measured with
+vertical slices instead. Both choices came from measurements that were
+unstable until they were made.
 
 ## Architecture
 

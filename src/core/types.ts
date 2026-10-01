@@ -225,8 +225,8 @@ export interface Layer {
 export interface DocMeta {
   title: string
   background: string
-  /** 'infinite' | 'grid' | 'dots' | 'lines' */
-  canvasStyle: 'infinite' | 'grid' | 'dots' | 'lines'
+  /** 'infinite' blank | 'grid' cross-hatch | 'lines' graph | 'ruled' notebook | 'dots' */
+  canvasStyle: 'infinite' | 'grid' | 'dots' | 'lines' | 'ruled'
   gridSize: number
   gridColor: string
   showGrid: boolean

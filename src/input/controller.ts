@@ -18,6 +18,7 @@ import { StrokeBuilder } from '../core/stroke'
 import { tiltAmount, twistAmount } from '../core/filters'
 import { constrainBox, constrainLine, isLineShape } from '../core/shapes'
 import { applyMatrix, boxToBox, rotateAbout, translate } from '../core/transform'
+import { recogniseInk } from '../core/recognise'
 
 export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
@@ -1059,6 +1060,65 @@ export class Controller {
     this.store.commit()
     this.store.setSelection(copies.map((c) => c.id))
     this.hooks.onDirty()
+  }
+
+  /**
+   * Snap a drawn stroke to the shape it was aiming at.
+   *
+   * The stroke's own id, layer and style carry over, so the result stays
+   * selected and one undo puts the ink back exactly as it was.
+   */
+  inkToShape(): boolean {
+    const sel = this.store.selectedElements
+    if (sel.length !== 1 || sel[0].kind !== 'stroke') return false
+    const stroke = sel[0] as StrokeElement
+
+    const ink = []
+    for (let i = 0; i + 1 < stroke.pts.length; i += 3) {
+      ink.push({ x: stroke.x + stroke.pts[i], y: stroke.y + stroke.pts[i + 1] })
+    }
+    const found = recogniseInk(ink)
+    if (!found) return false
+
+    const shape: ShapeElement = {
+      id: stroke.id,
+      kind: 'shape',
+      layerId: stroke.layerId,
+      opacity: stroke.opacity,
+      created: stroke.created,
+      x: found.box.x,
+      y: found.box.y,
+      x2: found.box.x + found.box.w,
+      y2: found.box.y + found.box.h,
+      style: {
+        stroke: { ...stroke.style },
+        fill: null,
+        fillOpacity: 0,
+        dash: null,
+        corner: 0,
+        sides: 0,
+        arrowHead: 'none',
+        shape: found.kind,
+      },
+    }
+
+    this.store.begin('Ink to shape')
+    this.store.modify(stroke.layerId, [stroke], [shape])
+    this.store.commit()
+    this.hooks.onDirty()
+    return true
+  }
+
+  /** True when a single stroke is selected and is close enough to a shape. */
+  canInkToShape(): boolean {
+    const sel = this.store.selectedElements
+    if (sel.length !== 1 || sel[0].kind !== 'stroke') return false
+    const stroke = sel[0] as StrokeElement
+    const ink = []
+    for (let i = 0; i + 1 < stroke.pts.length; i += 3) {
+      ink.push({ x: stroke.x + stroke.pts[i], y: stroke.y + stroke.pts[i + 1] })
+    }
+    return recogniseInk(ink) !== null
   }
 
   selectAll() {

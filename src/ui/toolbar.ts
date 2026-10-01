@@ -56,7 +56,7 @@ export class Toolbar {
       'aria-label': tool.name,
     })
     const iconName = tool.category === 'shape' && tool.shape ? SHAPE_ICON[tool.shape] : tool.icon
-    b.append(svgIcon(iconName, 21))
+    b.append(svgIcon(iconName, 21, 1.9))
     if (tool.category === 'freehand' || tool.category === 'shape') {
       const dot = el('span', { class: 'rail-dot' })
       b.append(dot)
@@ -78,7 +78,7 @@ export class Toolbar {
 
   private railButton(icon: string, title: string, onClick: () => void) {
     const b = el('button', { class: 'rail-btn', type: 'button', title, 'aria-label': title })
-    b.append(svgIcon(icon, 20))
+    b.append(svgIcon(icon, 20, 1.9))
     b.addEventListener('click', onClick)
     return b
   }

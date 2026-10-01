@@ -1,15 +1,32 @@
 import type { ShapeKind, TextureKind, Tool, ToolCategory } from './types'
 
 export const ICONS = {
-  pencil: 'M4 20l4-1 10-10-3-3L5 16l-1 4z M14 6l3 3 1.5-1.5-3-3L14 6z',
-  pen: 'M3 21l2-6 11-11 4 4L9 19l-6 2z M17 4l3 3',
+  /* ---- freehand: each pen gets a silhouette you can tell apart at 20px ---- */
+  /* Freehand pens are drawn at full 24x24 scale with at most one interior
+     mark each: at rail size (about 20px) an internal detail is a smudge, so
+     the *silhouette* has to do the work. Barrel thickness, tip shape and
+     overall width all differ between pens for exactly that reason. */
+  pencil:
+    'M3.5 20.5l1.8-5L16.8 4l3.2 3.2L8.5 18.7l-5 1.8z M16.8 4l2-2a1.5 1.5 0 012.2 0l1 1a1.5 1.5 0 010 2.2l-2 2',
+  pen: 'M8 8.5H18a3 3 0 013 3v1a3 3 0 01-3 3H8z M8 12L4.5 10v4z',
+  ballpoint:
+    'M7.5 10H20V14H7.5z M7.5 10v4L4.6 12z M3.4 12a1.1 1.1 0 100-2.2 1.1 1.1 0 000 2.2z M20 10V6h3v4',
+  fountain:
+    'M11 6.5H21V17.5H11z M11 12H6.5L2 8.5v7L6.5 12z M6 9.9v4.2',
+  chisel: 'M2.5 9.5H11V14.5H2.5z M11 6l10 3v8l-10-2.5z M5.5 9.5v5',
+  marker: 'M10 6H21V18H10z M17.5 6v12 M10 12l-5.5-3.5v7z',
+  crayon: 'M9.5 8H21V16H9.5z M16 8v8 M9.5 12L3 8v8z',
+  chalk: 'M3.5 8H20.5V16H3.5z M6.5 8v8 M17.5 8v8',
   brush:
-    'M6 20c-2 0-3-1-3-2.5S4.5 15 6 15c1.2 0 2 1 2 2.5S7 20 6 20z M9 17c0-4 2-7 5-9l3 3c-2 3-5 5-8 6z',
-  marker:
-    'M5 19l-2 2 1-4 9-9 3 3-9 9z M15 7l2-2 3 3-2 2',
+    'M14 7H21V15H14z M9.5 7H14V15H9.5z M9.5 11c-3.5.3-6.9 2-8.5 5.5 4.5-1 7.2-2.7 8.5-5.5z',
   highlighter:
-    'M4 20h16v-2H4z M6 16l-2-6 10-6 3 5-9 6z',
-  eraser: 'M8 20h11 M6.5 17.5l-3-3a2 2 0 010-2.8l7-7a2 2 0 012.8 0l3.5 3.5a2 2 0 010 2.8L12 17.5H8z M9 10l6 6',
+    'M9 6.5h9a3 3 0 013 3v5a3 3 0 01-3 3H9z M9 12L2.5 9v6z',
+  laser:
+    'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M6 6l2 2 M16 16l2 2 M18 6l-2 2 M8 16l-2 2 M12 9a3 3 0 100 6 3 3 0 000-6z',
+
+  /* ---- shapes and objects ---- */
+  eraser:
+    'M8 20h11 M6.5 17.5l-3-3a2 2 0 010-2.8l7-7a2 2 0 012.8 0l3.5 3.5a2 2 0 010 2.8L12 17.5H8z M9 10l6 6',
   line: 'M5 19L19 5 M5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M19 8a1.5 1.5 0 100-3 1.5 1.5 0 000 3z',
   arrow: 'M5 19L19 5 M12 5h7v7',
   rect: 'M4 5h16v14H4z',
@@ -20,10 +37,11 @@ export const ICONS = {
   polygon: 'M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9L12 3z',
   text: 'M5 6V4h14v2 M12 4v16 M9 20h6',
   note: 'M4 5h16v11l-4 4H4z M20 16h-4v4 M8 9h8 M8 13h5',
-  select: 'M5 3l14 8-6 1.5L10 19 5 3z',
-  laser: 'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M6 6l2 2 M16 16l2 2 M18 6l-2 2 M8 16l-2 2 M12 9a3 3 0 100 6 3 3 0 000-6z',
   image: 'M4 5h16v14H4z M4 15l4-4 4 4 3-3 5 5 M9 9.5a1 1 0 100-2 1 1 0 000 2z',
+  select: 'M5 3l14 8-6 1.5L10 19 5 3z',
   hand: 'M8 12V6a1.5 1.5 0 013 0v5 M11 11V4.5a1.5 1.5 0 013 0V11 M14 11V6a1.5 1.5 0 013 0v8a6 6 0 01-6 6h-1a6 6 0 01-6-6v-3a1.5 1.5 0 013 0',
+
+  /* ---- actions ---- */
   layers: 'M12 3l9 5-9 5-9-5 9-5z M3 13l9 5 9-5',
   trash: 'M5 7h14 M9 7V4h6v3 M7 7l1 13h8l1-13',
   copy: 'M9 9h10v11H9z M5 15V4h10',
@@ -56,6 +74,14 @@ export const ICONS = {
   duplicate: 'M4 8h11v12H4z M9 4h11v12',
   align: 'M4 4v16 M8 8h11 M8 14h7',
   rotate: 'M20 12a8 8 0 11-3-6.2 M20 4v5h-5',
+  search: 'M11 4a7 7 0 100 14 7 7 0 000-14z M20 20l-4-4',
+  /** turn a rough stroke into a shape */
+  inkToShape:
+    'M4 5h6 M4 5v6 M20 5h-6 M20 5v6 M4 19h6 M4 19v-6 M20 19h-6 M20 19v-6 M9.5 15.5l5-7',
+  /** a stack of paper sheets */
+  paper: 'M5 3h10l4 4v14H5z M15 3v4h4 M8 12h8 M8 16h5',
+  ruler: 'M3 9h18v6H3z M6.5 9v3 M10 9v4 M13.5 9v3 M17 9v4',
+  thickness: 'M4 17h3 M9 14h3 M14 10h3 M19 5h3',
 } as const
 
 /** Build a fully-specified tool; only the interesting fields need to be passed. */
@@ -117,17 +143,17 @@ export function defaultTools(): Tool[] {
   return [
     makeTool({
       id: 'select',
+      icon: ICONS.select,
       name: 'Select',
       category: 'select',
-      icon: ICONS.select,
       shortcut: 'V',
       size: 0,
     }),
     makeTool({
       id: 'pencil',
+      icon: ICONS.pencil,
       name: 'Pencil',
       category: 'freehand',
-      icon: ICONS.pencil,
       shortcut: 'P',
       color: '#22262e',
       size: 3.6,
@@ -147,9 +173,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'pen',
+      icon: ICONS.pen,
       name: 'Pen',
       category: 'freehand',
-      icon: ICONS.pen,
       shortcut: 'B',
       color: '#111827',
       size: 4,
@@ -166,9 +192,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'ballpoint',
+      icon: ICONS.ballpoint,
       name: 'Ballpoint',
       category: 'freehand',
-      icon: ICONS.pen,
       shortcut: 'U',
       color: '#0f172a',
       size: 3,
@@ -185,9 +211,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'fountain',
+      icon: ICONS.fountain,
       name: 'Fountain Pen',
       category: 'freehand',
-      icon: ICONS.brush,
       shortcut: 'F',
       color: '#1e3a8a',
       size: 7,
@@ -204,9 +230,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'chisel',
+      icon: ICONS.chisel,
       name: 'Chisel Nib',
       category: 'freehand',
-      icon: ICONS.brush,
       shortcut: 'J',
       color: '#7c2d12',
       size: 16,
@@ -223,9 +249,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'marker',
+      icon: ICONS.marker,
       name: 'Marker',
       category: 'freehand',
-      icon: ICONS.marker,
       shortcut: 'M',
       color: '#2563eb',
       size: 12,
@@ -242,9 +268,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'brush',
+      icon: ICONS.brush,
       name: 'Paint Brush',
       category: 'freehand',
-      icon: ICONS.brush,
       shortcut: 'A',
       color: '#7c3aed',
       size: 30,
@@ -261,14 +287,14 @@ export function defaultTools(): Tool[] {
       minWidth: 0.14,
       taperIn: 0.55,
       taperOut: 0.65,
-    }),
 
     /* ---- crayon: waxy, blunt, and it skips across the tooth of the paper ---- */
+    }),
     makeTool({
       id: 'crayon',
+      icon: ICONS.crayon,
       name: 'Crayon',
       category: 'freehand',
-      icon: ICONS.pencil,
       shortcut: 'Y',
       color: '#ef4444',
       size: 13,
@@ -285,14 +311,14 @@ export function defaultTools(): Tool[] {
       minWidth: 0.62,
       taperIn: 0.25,
       taperOut: 0.3,
-    }),
 
     /* ---- chalk: dusty, low pressure, very soft ---- */
+    }),
     makeTool({
       id: 'chalk',
+      icon: ICONS.chalk,
       name: 'Chalk',
       category: 'freehand',
-      icon: ICONS.marker,
       shortcut: 'C',
       // dusty slate, so it reads on a white board — switch to #f8fafc for a dark one
       color: '#94a3b8',
@@ -313,9 +339,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'highlighter',
+      icon: ICONS.highlighter,
       name: 'Highlighter',
       category: 'freehand',
-      icon: ICONS.highlighter,
       shortcut: 'H',
       color: '#fde047',
       size: 24,
@@ -334,9 +360,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'line',
+      icon: ICONS.line,
       name: 'Line',
       category: 'shape',
-      icon: ICONS.line,
       shortcut: 'L',
       shape: 'line',
       size: 3,
@@ -344,9 +370,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'arrow',
+      icon: ICONS.arrow,
       name: 'Arrow',
       category: 'shape',
-      icon: ICONS.arrow,
       shortcut: 'Shift+L',
       shape: 'arrow',
       size: 3,
@@ -354,9 +380,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'rect',
+      icon: ICONS.rect,
       name: 'Rectangle',
       category: 'shape',
-      icon: ICONS.rect,
       shortcut: 'R',
       shape: 'rect',
       size: 3,
@@ -365,9 +391,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'ellipse',
+      icon: ICONS.ellipse,
       name: 'Ellipse',
       category: 'shape',
-      icon: ICONS.ellipse,
       shortcut: 'O',
       shape: 'ellipse',
       size: 3,
@@ -375,9 +401,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'diamond',
+      icon: ICONS.diamond,
       name: 'Diamond',
       category: 'shape',
-      icon: ICONS.diamond,
       shortcut: 'D',
       shape: 'diamond',
       size: 3,
@@ -385,9 +411,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'triangle',
+      icon: ICONS.triangle,
       name: 'Triangle',
       category: 'shape',
-      icon: ICONS.triangle,
       shortcut: 'G',
       shape: 'triangle',
       size: 3,
@@ -395,9 +421,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'star',
+      icon: ICONS.star,
       name: 'Star',
       category: 'shape',
-      icon: ICONS.star,
       shortcut: 'S',
       shape: 'star',
       size: 3,
@@ -406,9 +432,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'polygon',
+      icon: ICONS.polygon,
       name: 'Polygon',
       category: 'shape',
-      icon: ICONS.polygon,
       shortcut: 'Shift+P',
       shape: 'polygon',
       size: 3,
@@ -417,9 +443,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'text',
+      icon: ICONS.text,
       name: 'Text',
       category: 'text',
-      icon: ICONS.text,
       shortcut: 'T',
       color: '#111827',
       fontSize: 26,
@@ -427,9 +453,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'note',
+      icon: ICONS.note,
       name: 'Sticky Note',
       category: 'note',
-      icon: ICONS.note,
       shortcut: 'N',
       size: 160,
       noteColor: '#ffd66b',
@@ -438,17 +464,17 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'image',
+      icon: ICONS.image,
       name: 'Image',
       category: 'image',
-      icon: ICONS.image,
       shortcut: 'I',
       size: 320,
     }),
     makeTool({
       id: 'eraser-stroke',
+      icon: ICONS.eraser,
       name: 'Eraser (ink)',
       category: 'eraser',
-      icon: ICONS.eraser,
       shortcut: 'E',
       size: 24,
       eraserMode: 'stroke',
@@ -456,9 +482,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'eraser-obj',
+      icon: ICONS.eraser,
       name: 'Eraser (whole)',
       category: 'eraser',
-      icon: ICONS.trash,
       shortcut: 'Shift+E',
       size: 20,
       eraserMode: 'element',
@@ -467,9 +493,9 @@ export function defaultTools(): Tool[] {
     }),
     makeTool({
       id: 'laser',
+      icon: ICONS.laser,
       name: 'Laser Pointer',
       category: 'laser',
-      icon: ICONS.laser,
       shortcut: 'K',
       color: '#ef4444',
       size: 7,
@@ -483,7 +509,7 @@ export function defaultTools(): Tool[] {
       taperOut: 0.9,
       laserTrail: 900,
     }),
-  ]
+  ];
 }
 
 export const PALETTE = [

@@ -825,6 +825,7 @@ export class Renderer {
    */
   drawGrid(ctx: CanvasRenderingContext2D, doc: DocumentState, view: ViewState, region: Rect) {
     if (!doc.meta.showGrid) return
+    const style = doc.meta.canvasStyle
     const step = doc.meta.gridSize
     if (step * view.scale < 5) return
     // thin the grid out on small cells so it never turns into noise
@@ -838,7 +839,18 @@ export class Renderer {
     ctx.fillStyle = doc.meta.gridColor
     ctx.strokeStyle = doc.meta.gridColor
 
-    if (doc.meta.canvasStyle === 'lines') {
+    if (style === 'ruled') {
+      // notebook paper: horizontal rules only
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      for (let y = startY; y <= endY; y += stride) {
+        const sy = Math.round(y * view.scale + view.y) + 0.5
+        ctx.moveTo(region.x * view.scale + view.x, sy)
+        ctx.lineTo(endX * view.scale + view.x, sy)
+      }
+      ctx.stroke()
+    } else if (style === 'lines' || style === 'grid') {
+      // cross-hatch / graph paper
       ctx.lineWidth = 1
       ctx.beginPath()
       for (let x = startX; x <= endX; x += stride) {
@@ -853,7 +865,7 @@ export class Renderer {
       }
       ctx.stroke()
     } else {
-      const r = (doc.meta.canvasStyle === 'dots' ? 1.15 : 0.95) / view.scale
+      const r = (style === 'dots' ? 1.15 : 0.95) / view.scale
       const path = new Path2D()
       for (let y = startY; y <= endY; y += stride) {
         for (let x = startX; x <= endX; x += stride) path.moveTo(x + r, y), path.arc(x, y, r, 0, Math.PI * 2)
