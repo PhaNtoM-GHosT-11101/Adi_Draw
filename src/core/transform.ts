@@ -18,6 +18,16 @@ export function applyMatrix(el: AnyElement, m: Mat): AnyElement {
   const scaled = det < 0.999 || det > 1.001
 
   switch (el.kind) {
+    case 'section': {
+      // a section is a plain rect, so both corners map and that is the whole story
+      const box = next as { x: number; y: number; w: number; h: number }
+      const far = matApply(m, box.x + box.w, box.y + box.h)
+      box.x = o.x
+      box.y = o.y
+      box.w = far.x - o.x
+      box.h = far.y - o.y
+      return next
+    }
     case 'stroke': {
       const stroke = next as StrokeElement
       const n = stroke.pts.length / 3

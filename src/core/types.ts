@@ -18,6 +18,7 @@ export type ToolCategory =
   | 'shape'
   | 'text'
   | 'note'
+  | 'section'
   | 'select'
   | 'laser'
   | 'image'
@@ -207,7 +208,29 @@ export interface ImageElement extends ElementBase {
   src: string
 }
 
+/**
+ * A titled region that gathers whatever sits inside it.
+ *
+ * Membership is geometric and derived on demand (see core/sections.ts) rather
+ * than stored, so it can never disagree with where things actually are.
+ * `parentId` is a cache of the nesting decision for the common cases and for
+ * export; the authoritative tree is always recomputed.
+ */
+export interface SectionElement extends ElementBase {
+  kind: 'section'
+  x: number
+  y: number
+  w: number
+  h: number
+  title: string
+  /** drives the title band */
+  accent: string
+  collapsed: boolean
+  parentId: string | null
+}
+
 export type AnyElement =
+  | SectionElement
   | StrokeElement
   | ShapeElement
   | TextElement

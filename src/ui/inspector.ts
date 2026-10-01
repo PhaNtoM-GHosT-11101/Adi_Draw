@@ -12,6 +12,7 @@ const CATEGORY_LABEL: Record<ToolCategory, string> = {
   eraser: 'Eraser',
   shape: 'Shape',
   text: 'Text',
+  section: 'Section',
   note: 'Note',
   laser: 'Laser',
   image: 'Image',
@@ -32,6 +33,10 @@ export interface InspectorHooks {
   onChange: () => void
   /** offered only when a single stroke is selected and it reads as a shape */
   canInkToShape?: () => boolean
+  /** the section the user currently has selected, if exactly one */
+  selectedSection?: () => { id: string; title: string; collapsed: boolean; nestedIn: string | null; count: number } | null
+  onRenameSection?: (id: string, title: string) => void
+  onToggleSection?: (id: string) => void
   inkToShape?: () => void
   onPickShortcut: (tool: Tool) => void
   onNewPreset: (tool: Tool) => void
@@ -73,6 +78,8 @@ export class Inspector {
     clear(this.body)
     if (!tool) return
     this.body.append(this.header(tool))
+    const secPanel = this.selectedSectionSection()
+    if (secPanel) this.body.append(secPanel)
     if (tool.category === 'select' && this.hooks.canInkToShape?.()) {
       const b = button('Ink to shape', () => this.hooks.inkToShape?.(), { icon: ICONS.inkToShape })
       this.body.append(section('Selection', [b, el('p', {
@@ -90,6 +97,7 @@ export class Inspector {
     }
     if (tool.category === 'shape') this.body.append(this.shapeSection(tool))
     if (tool.category === 'text' || tool.category === 'note') this.body.append(this.textSection(tool))
+    if (tool.category === 'section') this.body.append(this.sectionSection(tool))
     if (tool.category === 'eraser') this.body.append(this.eraserSection(tool))
     this.body.append(this.shortcutSection(tool))
     this.body.append(this.presetSection(tool))
@@ -549,6 +557,60 @@ export class Inspector {
   }
 
   /* ------------------------------ eraser -------------------------- */
+
+  private sectionSection(tool: Tool) {
+    const colors = NOTE_COLORS
+    return section('Section', [
+      el('p', {
+        class: 'hint',
+        text: 'Drag on the board to draw one. Anything you drop inside joins it, and drawing a section inside another makes a sub-section. Click a title band to fold it.',
+      }),
+      el('div', { class: 'bg-presets' },
+        colors.map((c) => {
+          const b = el('button', { class: 'bg-chip', type: 'button', title: c, style: `background:${c}` })
+          b.addEventListener('click', () => this.set(tool.id, { noteColor: c }))
+          return b
+        }),
+      ),
+    ])
+  }
+
+  /** Shown once a section exists, so its title and nesting can be edited. */
+  private selectedSectionSection() {
+    const sel = this.hooks.selectedSection?.()
+    if (!sel) return null
+    const title = el('input', {
+      class: 'name-input',
+      value: sel.title,
+      placeholder: 'Section title',
+      spellcheck: 'false',
+    }) as HTMLInputElement
+    title.addEventListener('input', () => this.hooks.onRenameSection?.(sel.id, title.value))
+    title.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter') title.blur()
+    })
+
+    const fold = el(
+      'button',
+      { class: 'btn', type: 'button' },
+      [
+        svgIcon(ICONS['chevron'], 16),
+        el('span', { text: sel.collapsed ? 'Unfold' : 'Fold' }),
+      ],
+    )
+    fold.addEventListener('click', () => this.hooks.onToggleSection?.(sel.id))
+
+    return section(sel.collapsed ? 'Section (folded)' : 'Section', [
+      el('div', { class: 'field' }, [el('label', { class: 'field-label', text: 'Title' }), title]),
+      sel.nestedIn
+        ? el('p', { class: 'hint', text: `Sub-section of “${sel.nestedIn}”` })
+        : el('p', { class: 'hint', text: 'Top-level section.' }),
+      sel.count > 0
+        ? el('p', { class: 'hint', text: `Holds ${sel.count} object${sel.count === 1 ? '' : 's'}.` })
+        : el('p', { class: 'hint', text: 'Nothing inside yet — drop something in.' }),
+      fold,
+    ])
+  }
 
   private eraserSection(tool: Tool) {
     return section('Eraser', [

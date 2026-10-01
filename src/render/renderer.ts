@@ -1,9 +1,18 @@
-import type { AnyElement, DocumentState, NoteElement, StrokeElement, TextElement, ImageElement } from '../core/types'
+import type {
+  AnyElement,
+  DocumentState,
+  ImageElement,
+  NoteElement,
+  SectionElement,
+  StrokeElement,
+  TextElement,
+} from '../core/types'
 import { elementBBox } from '../core/store'
 import { outlinePath } from '../core/stroke'
 import { shapeGeom, isLineShape, notePathData, noteFoldData } from '../core/shapes'
 import { clamp, rectsIntersect, uid } from '../core/geometry'
 import { TextureCache } from './textures'
+import { SECTION_HEADER, hiddenByCollapse } from '../core/sections'
 import type { Rect, ViewState } from '../core/types'
 
 interface CacheEntry {
@@ -28,6 +37,23 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D
   private cache = new Map<string, CacheEntry>()
   private textures: TextureCache
+  private sectionCache: { sig: string; list: SectionElement[] } | null = null
+  private sectionSurface = 'rgba(255,255,255,0.86)'
+  private sectionEdge = 'rgba(15,23,42,0.14)'
+  private sectionShadow = 'rgba(15,23,42,0.10)'
+
+  private uiFont = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+
+  /**
+   * Sections are cards, so they need a surface that reads on either theme: a
+   * white board would swallow a translucent white card entirely, and a dark
+   * one would look like a hole.
+   */
+  setTheme(dark: boolean) {
+    this.sectionSurface = dark ? 'rgba(30,41,59,0.86)' : 'rgba(255,255,255,0.86)'
+    this.sectionEdge = dark ? 'rgba(148,163,184,0.30)' : 'rgba(15,23,42,0.14)'
+    this.sectionShadow = dark ? 'rgba(0,0,0,0.42)' : 'rgba(15,23,42,0.10)'
+  }
   private bboxCache = new Map<string, { key: string; box: Rect }>()
   private textCache = new Map<string, string[]>()
   private dpr = 1
@@ -194,6 +220,8 @@ export class Renderer {
 
   private bboxKey(el: AnyElement) {
     switch (el.kind) {
+      case 'section':
+        return `${el.x},${el.y},${el.w},${el.h},${el.title.length},${el.collapsed}`
       case 'stroke':
         return `${el.x},${el.y},${el.pts.length},${el.style.size}`
       case 'shape':
@@ -297,7 +325,8 @@ export class Renderer {
 
     p.regions = regions.length
     const tPaint = performance.now()
-    for (const region of regions) this.paintSceneRegion(doc, view, region)
+    for (const region of regions)
+      this.paintSceneRegion(doc, view, region, { selection: new Set(), showSelectionUI: false })
     p.paint = performance.now() - tPaint
 
     // composite
@@ -396,7 +425,7 @@ export class Renderer {
   }
 
   /** Repaint one world-space region of the scene canvas. */
-  private paintSceneRegion(doc: DocumentState, view: ViewState, region: Rect) {
+  private paintSceneRegion(doc: DocumentState, view: ViewState, region: Rect, opts: RenderOptions) {
     const ctx = this.sceneCtx
     const { dpr } = this
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -422,6 +451,19 @@ export class Renderer {
 
     const overlay: { el: AnyElement; alpha: number }[] = []
 
+    // Sections are containers, so they have to land *behind* whatever they
+    // hold, and a collapsed one takes its contents with it. Both are decided
+    // once per region rather than per element.
+    const sections = this.sectionsIn(doc)
+    const hidden = this.collapsedMask(doc, sections)
+
+    // before anything else: a section is a container, so its contents have to
+    // land on top of it, not under it
+    for (const sec of sections) {
+      if (!rectsIntersect(this.bboxFor(sec), region)) continue
+      this.paintSection(ctx, sec, opts)
+    }
+
     for (const layer of doc.layers) {
       if (!layer.visible || layer.opacity <= 0) continue
       const list = doc.elements[layer.id] ?? []
@@ -434,6 +476,7 @@ export class Renderer {
       } else {
         let drawn = 0
         for (const el of list) {
+          if (hidden.has(el.id)) continue
           if (!rectsIntersect(this.bboxFor(el), region)) continue
           drawn++
           this.paintElement(ctx, el, { selection: new Set(), showSelectionUI: false })
@@ -475,10 +518,47 @@ export class Renderer {
     sctx.clearRect(0, 0, w, h)
     sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     const list = doc.elements[layerId] ?? []
+    const hidden = this.collapsedMask(doc, this.sectionsIn(doc))
     for (const el of list) {
+      if (el.kind === 'section' || hidden.has(el.id)) continue
       if (!rectsIntersect(this.bboxFor(el), region)) continue
       this.paintElement(sctx, el, { selection: new Set(), showSelectionUI: false })
     }
+    for (const sec of this.sectionsIn(doc)) {
+      if (!rectsIntersect(this.bboxFor(sec), region)) continue
+      this.paintSection(sctx, sec, { selection: new Set(), showSelectionUI: false })
+    }
+  }
+
+  /** Every section on the board, across all layers. */
+  private sectionsIn(doc: DocumentState): SectionElement[] {
+    let cache = this.sectionCache
+    let sig = ''
+    if (cache) {
+      for (const layer of doc.layers) for (const el of doc.elements[layer.id] ?? []) if (el.kind === 'section') sig += el.id + el.collapsed
+      if (sig === cache.sig) return cache.list
+    }
+    const list: SectionElement[] = []
+    for (const layer of doc.layers) {
+      if (!layer.visible) continue
+      for (const el of doc.elements[layer.id] ?? []) if (el.kind === 'section') list.push(el)
+    }
+    this.sectionCache = { sig, list }
+    return list
+  }
+
+  /** Ids of elements folded away inside a collapsed section. */
+  private collapsedMask(doc: DocumentState, sections: SectionElement[]): Set<string> {
+    const out = new Set<string>()
+    if (!sections.some((s) => s.collapsed)) return out
+    for (const layer of doc.layers) {
+      if (!layer.visible) continue
+      for (const el of doc.elements[layer.id] ?? []) {
+        if (el.kind === 'section') continue
+        if (hiddenByCollapse(el, sections)) out.add(el.id)
+      }
+    }
+    return out
   }
 
   private paintElement(ctx: CanvasRenderingContext2D, el: AnyElement, opts: RenderOptions) {
@@ -547,6 +627,103 @@ export class Renderer {
       ctx.strokeRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4)
     }
     ctx.restore()
+  }
+
+  /**
+   * Paint a section: a translucent card with a solid title band.
+   *
+   * The band is drawn as a separate top-rounded shape rather than a plain rect
+   * so the header reads as part of the card instead of a stripe laid over it.
+   */
+  private paintSection(ctx: CanvasRenderingContext2D, el: SectionElement, opts: RenderOptions) {
+    const s = 1
+    const headerH = SECTION_HEADER * s
+    const w = el.w
+    const h = el.collapsed ? headerH : el.h
+    const radius = 14 * s
+
+    ctx.save()
+    ctx.globalAlpha = el.opacity
+
+    // card, with a soft shadow so it sits above the board rather than in it
+    ctx.save()
+    ctx.shadowColor = this.sectionShadow
+    ctx.shadowBlur = 18 * s
+    ctx.shadowOffsetY = 4 * s
+    ctx.fillStyle = this.sectionSurface
+    ctx.beginPath()
+    ctx.roundRect(el.x, el.y, w, Math.max(h, radius), radius)
+    ctx.fill()
+    ctx.restore()
+
+    // a hairline so a white section still reads against a white board
+    ctx.strokeStyle = this.sectionEdge
+    ctx.lineWidth = 1 * s
+    ctx.stroke()
+
+    // title band
+    ctx.save()
+    ctx.beginPath()
+    ctx.roundRect(el.x, el.y, w, Math.max(h, radius), radius)
+    ctx.clip()
+    ctx.fillStyle = el.accent
+    ctx.fillRect(el.x, el.y, w, Math.max(headerH, radius))
+    ctx.restore()
+
+    // label
+    const title = el.collapsed ? el.title || 'Section' : el.title || 'Untitled section'
+    ctx.fillStyle = '#fff'
+    ctx.font = `600 ${14 * s}px ${this.uiFont}`
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'left'
+    const textX = el.x + 12 * s + (el.collapsed ? 0 : 0)
+    const maxW = w - 24 * s
+    ctx.fillText(this.ellipsize(ctx, title, maxW), textX, el.y + headerH / 2)
+
+    // collapse chevron on the right of the band
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+    ctx.lineWidth = 1.8 * s
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    const cx = el.x + w - 16 * s
+    const cy = el.y + headerH / 2
+    const r = 4.5 * s
+    ctx.beginPath()
+    if (el.collapsed) {
+      ctx.moveTo(cx - r, cy - r * 0.6)
+      ctx.lineTo(cx, cy + r * 0.6)
+      ctx.lineTo(cx + r, cy - r * 0.6)
+    } else {
+      ctx.moveTo(cx - r, cy - r * 0.6)
+      ctx.lineTo(cx + r, cy - r * 0.6)
+    }
+    ctx.stroke()
+    ctx.restore()
+
+    if (opts.hoverId === el.id || opts.selection.has(el.id)) {
+      ctx.save()
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = opts.selection.has(el.id) ? 'rgba(37,99,235,0.95)' : 'rgba(37,99,235,0.45)'
+      ctx.lineWidth = (opts.selection.has(el.id) ? 1.6 : 1.2) * s
+      ctx.setLineDash(opts.selection.has(el.id) ? [] : [5 * s, 4 * s])
+      ctx.beginPath()
+      ctx.roundRect(el.x - 1, el.y - 1, w + 2, Math.max(h, radius) + 2, radius + 1)
+      ctx.stroke()
+      ctx.restore()
+    }
+  }
+
+  private ellipsize(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+    if (maxW <= 8) return ''
+    if (ctx.measureText(text).width <= maxW) return text
+    let lo = 0
+    let hi = text.length
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (ctx.measureText(text.slice(0, mid) + '…').width <= maxW) lo = mid
+      else hi = mid - 1
+    }
+    return lo > 0 ? text.slice(0, lo) + '…' : ''
   }
 
   /**
@@ -691,6 +868,10 @@ export class Renderer {
     const ctx = this.hit
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     switch (el.kind) {
+      case 'section': {
+        const b = this.bboxFor(el)
+        return wx >= b.x - tol && wx <= b.x + b.w + tol && wy >= b.y - tol && wy <= b.y + b.h + tol
+      }
       case 'stroke': {
         if (el.style.blend === 'destination-out') return false
         const n = el.pts.length / 3

@@ -5,6 +5,8 @@ import { Store, emptyDoc } from './core/store'
 import { ToolStore, writeJson } from './core/app'
 import { Renderer } from './render/renderer'
 import { Controller, textStyleOf } from './input/controller'
+import { buildSectionTree, membersOf } from './core/sections'
+import { toast } from './ui/toast'
 import { installShortcuts, recordShortcut } from './input/shortcuts'
 import { Toolbar } from './ui/toolbar'
 import { Inspector, BoardPanel } from './ui/inspector'
@@ -115,6 +117,9 @@ class App {
       onPickShortcut: (tool) => this.recordShortcut(tool),
       onNewPreset: (tool) => this.newToolPreset(tool),
       onRecentsChange: (r) => writeJson(RECENTS_KEY, r),
+      selectedSection: () => this.selectedSectionInfo(),
+      onRenameSection: (id, title) => this.controller.setSectionTitle(id, title),
+      onToggleSection: (id) => this.controller.toggleSectionCollapsed(id),
       canInkToShape: () => this.controller.canInkToShape(),
       inkToShape: () => this.applyInkToShape(),
     })
@@ -169,6 +174,7 @@ class App {
           this.requestFrame()
         },
         onDirty: () => this.markDirty(),
+        onSectionFolded: (folded) => toast(folded ? 'Section folded' : 'Section unfolded'),
       },
       { palmRejection: this.toolStore.settings.palmRejection },
     )
@@ -185,7 +191,7 @@ class App {
       }
       // the tool panel offers "Ink to shape" based on what is selected, so it
       // has to follow selection changes as well as tool changes
-      if (kinds.has('selection')) this.inspector.render()
+      if (kinds.has('selection') || kinds.has('doc')) this.inspector.render()
       // every board control reads meta back out, so the panel must follow it
       if (kinds.has('doc')) this.boardPanel.render()
     })
@@ -201,10 +207,32 @@ class App {
    * The converted result is a shape, not ink, so the tool panel has to
    * re-read the selection or the button would linger after it is done.
    */
+  /** Title and nesting of the selected section, for the tool panel. */
+  private selectedSectionInfo() {
+    const sel = this.store.selectedElements
+    if (sel.length !== 1 || sel[0].kind !== 'section') return null
+    const sec = sel[0]
+    const sections = this.controller.allSections()
+    const parent = buildSectionTree(sections).get(sec.id) ?? null
+    const outer = parent ? sections.find((s) => s.id === parent) : null
+    const members = membersOf(sec, this.store.allElements(), sections)
+    return {
+      id: sec.id,
+      title: sec.title,
+      collapsed: sec.collapsed,
+      nestedIn: outer ? outer.title || 'Untitled section' : null,
+      count: members.length,
+    }
+  }
+
   private applyInkToShape() {
-    if (!this.controller.inkToShape()) return
+    if (!this.controller.inkToShape()) {
+      toast('That ink does not read as a shape', 'warn')
+      return
+    }
     this.requestFrame()
     this.inspector.render()
+    toast('Snapped to a shape — Ctrl+Z to put the ink back', 'ok')
   }
 
   /* ----------------------------- layout --------------------------- */
@@ -324,6 +352,9 @@ class App {
       choice === 'dark' ||
       (choice === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
     document.body.dataset.theme = dark ? 'dark' : 'light'
+    this.renderer.setTheme(dark)
+    this.store.markAllDirty()
+    this.requestFrame()
   }
 
   private onMenuAction(action: string) {
@@ -370,7 +401,11 @@ class App {
       {
         undo: () => this.undo(),
         redo: () => this.redo(),
-        deleteSelection: () => this.controller.deleteSelection(),
+        deleteSelection: () => {
+          const n = this.store.selection.size
+          this.controller.deleteSelection()
+          if (n) toast(`Deleted ${n} object${n === 1 ? '' : 's'}`)
+        },
         selectAll: () => this.controller.selectAll(),
         duplicate: () => this.controller.duplicateSelection(),
         inkToShape: () => this.applyInkToShape(),
@@ -550,6 +585,7 @@ class App {
     const sel = this.store.selectedElements
     if (!sel.length) return
     this.clipboard = sel.map((e) => structuredClone(e))
+    toast(`${sel.length} object${sel.length === 1 ? '' : 's'} copied`)
   }
 
   pasteClipboard() {
@@ -609,11 +645,15 @@ class App {
     if (desktop) {
       const contents = JSON.stringify(serialise(this.store.doc, this.store.view), null, 2)
       const path = await desktop.save(contents, `${slugify(this.store.doc.meta.title)}.wbd`)
-      if (path) this.status(`Saved ${path}`)
+      if (path) {
+        this.status(`Saved ${path}`)
+        toast('Board saved', 'ok')
+      }
       return
     }
     const name = saveToDisk(this.store.doc)
     this.status(`Saved ${name}`)
+    toast('Board saved', 'ok')
   }
 
   private async saveAs() {
@@ -636,7 +676,10 @@ class App {
       },
       (opts, format) => {
         if (format === 'png') void this.exportPng(opts)
-        else exportSVG(this.store.doc, opts)
+        else {
+          exportSVG(this.store.doc, opts)
+          toast('Exported as SVG', 'ok')
+        }
       },
     )
   }
@@ -646,10 +689,14 @@ class App {
       const dataUrl = await toPngDataUrl(this.store.doc, opts)
       if (!dataUrl) return
       const path = await desktop.exportPng(`${slugify(this.store.doc.meta.title)}.png`, dataUrl)
-      if (path) this.status(`Exported ${path}`)
+      if (path) {
+        this.status(`Exported ${path}`)
+        toast('Exported as PNG', 'ok')
+      }
       return
     }
     await exportPNG(this.store.doc, opts)
+    toast('Exported as PNG', 'ok')
   }
 
   private zoomFit() {

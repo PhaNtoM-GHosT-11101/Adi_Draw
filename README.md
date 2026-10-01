@@ -177,6 +177,7 @@ the fountain pen or a bristle finish on a marker. Two controls:
 
 **Freehand** — see [the pens](#the-pens) below, plus a laser pointer
 **Shapes** — Line, Arrow, Rectangle, Ellipse, Diamond, Triangle, Star, Polygon
+**Sections** — titled containers, with sub-sections nested inside
 **Objects** — Text, Sticky notes, Images (paste with `Ctrl+V`)
 **Erasing** — Ink eraser (rubs out pixels, like eraser on paper) and
 whole-object eraser (removes the whole stroke)
@@ -200,6 +201,38 @@ Two things make it behave rather than misfire:
 It only fires when the match is genuinely close, so a scribble is left alone.
 The stroke keeps its id, layer and style, so the result stays selected and a
 single undo puts the ink back exactly as it was.
+
+### Sections and sub-sections
+
+A section gathers whatever falls inside it, the way a OneNote section gathers
+notes. Draw one with `G` (or drag it out with the Section tool), and anything
+you drop into it joins.
+
+Nothing is filed explicitly. **Membership is derived from geometry every time
+it is asked for**, so it can never disagree with where things actually are, and
+dragging a note into a section files it while dragging it back out unfiles it.
+Two deliberate details:
+
+- Membership uses the element's **centre**, not its edges. An object that
+  merely overhangs a section has not joined it, which is what the user sees
+  when they drop something in.
+- Sub-sections are sections drawn inside sections. Nesting follows the
+  geometry too, so there is no separate "make sub-section" mode to get wrong —
+  and a section is always filed under the **innermost** container, not the
+  largest.
+
+Press a section's **title band** to fold it; its contents go with it. Dragging
+that same band moves the section *and everything in it*, contents of
+sub-sections included, which is the only way to grab a section that has objects
+sitting on top of it. Sections paint behind their contents, and export to PNG
+and SVG as a card plus a title band.
+
+### Feedback
+
+Saving, exporting, copying, deleting, folding and ink-to-shape all say so. A
+short toast answers "did that work?" without stealing focus. Repeating the same
+message re-uses the toast rather than stacking duplicates, so holding a
+shortcut down does not build a wall.
 
 ### Paper
 
@@ -280,7 +313,7 @@ switch between a light and dark UI — or leave it on *Match system*.
 ## Testing
 
 ```bash
-npm test               # typecheck + 150 checks across 8 browser suites
+npm test               # typecheck + 208 checks across 10 browser suites
 npm run perf           # renderer timings on a 4 000-object board
 npm run test:visual    # draws a sample board to test/board.png
 npm run test:svg       # exports an SVG and re-renders it to verify it
@@ -307,6 +340,11 @@ assert behaviour, not implementation:
   and one undo puts the original ink back
 - ruled paper is crossed by a vertical scan many times and a horizontal scan
   almost never
+- nesting picks the innermost container, folding a parent hides what its
+  sub-sections hold, and a section is never its own parent
+- dragging a section carries its contents, and one undo puts them back
+- folding really stops the contents painting, and the folded box matches what
+  is drawn so the selection handles do not lie
 
 ### A note on measuring texture
 

@@ -1,3 +1,4 @@
+import { SECTION_HEADER } from './sections'
 import type {
   AnyElement,
   DocumentState,
@@ -539,6 +540,13 @@ export class Store {
 
 export function elementBBox(el: AnyElement): Rect {
   switch (el.kind) {
+    case 'section': {
+      // folded, a section *is* its title band, so the box has to say so or the
+      // selection handles and hit test disagree with what is on screen
+      const pad = 3
+      const h = el.collapsed ? Math.min(el.h, SECTION_HEADER) : el.h
+      return { x: el.x - pad, y: el.y - pad, w: el.w + pad * 2, h: h + pad * 2 }
+    }
     case 'stroke': {
       const n = el.pts.length / 3
       if (!n) return { x: el.x, y: el.y, w: 0, h: 0 }

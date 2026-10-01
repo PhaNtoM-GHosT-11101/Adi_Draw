@@ -3,6 +3,7 @@ import type {
   ImageElement,
   NoteElement,
   Rect,
+  SectionElement,
   ShapeElement,
   ShapeStyle,
   StrokeElement,
@@ -19,6 +20,7 @@ import { tiltAmount, twistAmount } from '../core/filters'
 import { constrainBox, constrainLine, isLineShape } from '../core/shapes'
 import { applyMatrix, boxToBox, rotateAbout, translate } from '../core/transform'
 import { recogniseInk } from '../core/recognise'
+import { SECTION_HEADER, SECTION_MIN, membersOf, parentForNewSection } from '../core/sections'
 
 export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
@@ -27,6 +29,7 @@ type Mode =
   | 'draw'
   | 'shape'
   | 'note'
+  | 'section'
   | 'marquee'
   | 'move'
   | 'scale'
@@ -35,6 +38,10 @@ type Mode =
   | 'erase'
 
 export interface ControllerHooks {
+  /** a new section was drawn; the host uses this to offer its title for editing */
+  onSectionCreated?: (id: string) => void
+  /** fired after a fold or unfold, so the host can confirm it */
+  onSectionFolded?: (folded: boolean) => void
   onRequestText: (payload: {
     x: number
     y: number
@@ -93,6 +100,9 @@ export class Controller {
 
   private dragBox: Rect | null = null
   private selectionBox: Rect | null = null
+  private sectionAnchor: { x: number; y: number } | null = null
+  private sectionDragged = false
+  private pendingFold: string | null = null
   private selectionBefore: AnyElement[] = []
   private handle: Handle | null = null
   private rotateStart = 0
@@ -112,7 +122,7 @@ export class Controller {
   }
 
   get isDrawing() {
-    return this.mode === 'draw' || this.mode === 'shape' || this.mode === 'note'
+    return this.mode === 'draw' || this.mode === 'shape' || this.mode === 'note' || this.mode === 'section'
   }
   get isPanning() {
     return this.mode === 'pan'
@@ -310,6 +320,9 @@ export class Controller {
       case 'note':
         this.beginNote(s, w, tool)
         break
+      case 'section':
+        this.beginSection(w, tool)
+        break
       case 'text': {
         this.mode = 'idle'
         this.activePointer = null
@@ -464,6 +477,107 @@ export class Controller {
     this.store.addElement(el.layerId, el, false)
   }
 
+  /** Every section on the board, whatever layer it is on. */
+  allSections(): SectionElement[] {
+    const out: SectionElement[] = []
+    for (const layer of this.store.doc.layers) {
+      for (const el of this.store.doc.elements[layer.id] ?? []) if (el.kind === 'section') out.push(el)
+    }
+    return out
+  }
+
+  /* ----------------------------- section -------------------------- */
+
+  /** A drag sizes the section; a plain click drops one at a usable default. */
+  private beginSection(w: { x: number; y: number }, tool: Tool) {
+    this.mode = 'section'
+    this.sectionAnchor = { x: w.x, y: w.y }
+    this.sectionDragged = false
+    const el: SectionElement = {
+      id: uid('s'),
+      kind: 'section',
+      layerId: this.getLayer(),
+      opacity: 1,
+      created: Date.now(),
+      x: w.x,
+      y: w.y,
+      w: 0,
+      h: 0,
+      title: '',
+      accent: tool.noteColor || tool.color,
+      collapsed: false,
+      parentId: null,
+    }
+    this.liveEl = el
+    this.store.addElement(el.layerId, el, false)
+  }
+
+  private updateSection(w: { x: number; y: number }, e: PointerEvent) {
+    const el = this.liveEl
+    if (!el || el.kind !== 'section') return
+    const a = this.sectionAnchor
+    if (!a) return
+    if (Math.hypot(w.x - a.x, w.y - a.y) > 4) this.sectionDragged = true
+    let [x2, y2] = constrainBox(a.x, a.y, w.x, w.y, e.shiftKey || this.shiftDown)
+    if (this.store.doc.meta.snapToGrid) {
+      const g = this.store.doc.meta.gridSize
+      x2 = roundTo(x2, g)
+      y2 = roundTo(y2, g)
+    }
+    el.x = Math.min(a.x, x2)
+    el.y = Math.min(a.y, y2)
+    el.w = Math.abs(x2 - a.x)
+    el.h = Math.abs(y2 - a.y)
+    this.markPreview(el)
+  }
+
+  /** True when a world point lands in a section's title band. */
+  sectionHeaderHit(el: AnyElement, wx: number, wy: number): boolean {
+    if (el.kind !== 'section') return false
+    const band = SECTION_HEADER * 0.9
+    const bottom = el.collapsed ? el.y + band : el.y + band
+    return wy >= el.y && wy <= bottom && wx >= el.x && wx <= el.x + el.w
+  }
+
+  /** Fold or unfold a section, as one undoable step. */
+  toggleSectionCollapsed(id: string) {
+    const el = this.store.getElement(id)
+    if (!el || el.kind !== 'section') return false
+    const before = structuredClone(el)
+    const after = { ...before, collapsed: !before.collapsed }
+    this.store.begin('Fold section')
+    this.store.modify(el.layerId, [before], [after as SectionElement])
+    this.store.commit()
+    this.hooks.onDirty()
+    this.hooks.onSectionFolded?.(!before.collapsed)
+    return true
+  }
+
+  /** Rename a section's title. */
+  setSectionTitle(id: string, title: string) {
+    const el = this.store.getElement(id)
+    if (!el || el.kind !== 'section' || el.title === title) return false
+    const before = structuredClone(el)
+    const after = { ...before, title }
+    this.store.begin('Rename section')
+    this.store.modify(el.layerId, [before], [after as SectionElement])
+    this.store.commit()
+    this.hooks.onDirty()
+    return true
+  }
+
+  setSectionAccent(id: string, accent: string) {
+    const el = this.store.getElement(id)
+    if (!el || el.kind !== 'section' || el.accent === accent) return false
+    const before = structuredClone(el)
+    const after = { ...before, accent }
+    this.store.begin('Section colour')
+    this.store.modify(el.layerId, [before], [after as SectionElement])
+    this.store.commit()
+    this.hooks.onDirty()
+    return true
+  }
+
   /* ------------------------------- note --------------------------- */
 
   private beginNote(s: { x: number; y: number }, w: { x: number; y: number }, tool: Tool) {
@@ -513,10 +627,29 @@ export class Controller {
 
     const hit = this.renderer.pick(this.store.doc, w.x, w.y, 6 / this.store.view.scale)
     if (hit) {
+      // A press on a section's title band is ambiguous: releasing without
+      // moving folds the section, dragging moves it and everything in it. That
+      // is the only way to grab a section that has objects on top of it.
+      const onBand = hit.kind === 'section' && !e.shiftKey && this.sectionHeaderHit(hit, w.x, w.y)
       if (e.shiftKey) this.store.toggleSelection(hit.id)
       else if (!this.store.selection.has(hit.id)) this.store.setSelection([hit.id])
       this.mode = 'move'
+      this.pendingFold = onBand ? hit.id : null
       this.selectionBefore = this.store.selectedElements
+      // dragging a section carries its contents, sub-sections included
+      if (hit.kind === 'section' && !onBand) {
+        const carried = membersOf(hit, this.store.allElements(), this.allSections())
+        if (carried.length) {
+          this.store.setSelection([hit.id, ...carried.map((c) => c.id)])
+          this.selectionBefore = this.store.selectedElements
+        }
+      } else if (onBand) {
+        const carried = membersOf(hit, this.store.allElements(), this.allSections())
+        if (carried.length) {
+          this.store.setSelection([hit.id, ...carried.map((c) => c.id)])
+          this.selectionBefore = this.store.selectedElements
+        }
+      }
     } else {
       this.store.clearSelection()
       this.mode = 'marquee'
@@ -608,6 +741,9 @@ export class Controller {
         break
       case 'note':
         this.updateNote(s, w)
+        break
+      case 'section':
+        this.updateSection(w, e)
         break
       case 'erase':
         this.eraseAt(w.x, w.y, this.getTool().size)
@@ -737,6 +873,7 @@ export class Controller {
       else dx = 0
     }
     if (dx === 0 && dy === 0) return
+    if (this.pendingFold && Math.hypot(dx, dy) > 3) this.pendingFold = null
     this.store.patch(this.selectionBefore.map((el) => translate(el, dx, dy)))
   }
 
@@ -833,6 +970,29 @@ export class Controller {
         this.builder = null
         break
       }
+      case 'section': {
+        const el = this.liveEl
+        if (el && el.kind === 'section') {
+          const dragged = this.sectionDragged
+          if (!dragged) {
+            // a click, not a drag: give it a size worth having
+            el.w = Math.max(el.w, 420)
+            el.h = Math.max(el.h, 260)
+          }
+          if (el.w >= SECTION_MIN && el.h >= 48) {
+            // nesting follows geometry: a section drawn inside another is its child
+            el.parentId = parentForNewSection(el, this.allSections())
+            this.store.pushOp({ t: 'add', layerId: el.layerId, elems: [structuredClone(el)] })
+            this.store.setSelection([el.id])
+            this.hooks.onSectionCreated?.(el.id)
+            this.hooks.onDirty()
+          } else {
+            this.store.removeElements(el.layerId, new Set([el.id]), false)
+          }
+        }
+        this.liveEl = null
+        break
+      }
       case 'shape': {
         const el = this.liveEl
         if (el && el.kind === 'shape') {
@@ -888,6 +1048,20 @@ export class Controller {
       case 'move':
       case 'scale':
       case 'rotate': {
+        if (this.pendingFold) {
+          // released on the title band without dragging: that was a fold
+          const id = this.pendingFold
+          this.pendingFold = null
+          this.selectionBefore = []
+          this.handle = null
+          this.selectionBox = null
+          this.store.setSelection([id])
+          this.toggleSectionCollapsed(id)
+          this.mode = 'idle'
+          this.resetPreviewDamage()
+          this.store.notify('doc')
+          return
+        }
         const before = this.selectionBefore
         const after = this.store.selectedElements
         if (!sameElements(before, after)) {

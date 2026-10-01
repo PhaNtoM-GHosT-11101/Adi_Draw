@@ -43,6 +43,8 @@ export const ICONS = {
 
   /* ---- actions ---- */
   layers: 'M12 3l9 5-9 5-9-5 9-5z M3 13l9 5 9-5',
+  /** a container with a header band and a sub-section nested inside */
+  sections: 'M3.5 4.5h17v15h-17z M3.5 8.5h17 M7.5 12.5h10v5h-10z',
   trash: 'M5 7h14 M9 7V4h6v3 M7 7l1 13h8l1-13',
   copy: 'M9 9h10v11H9z M5 15V4h10',
   eye: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z M12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z',
@@ -469,6 +471,16 @@ export function defaultTools(): Tool[] {
       category: 'image',
       shortcut: 'I',
       size: 320,
+    }),
+    makeTool({
+      id: 'section',
+      icon: ICONS.sections,
+      name: 'Section',
+      category: 'section',
+      shortcut: 'G',
+      color: '#2563eb',
+      size: 420,
+      noteColor: '#2563eb',
     }),
     makeTool({
       id: 'eraser-stroke',

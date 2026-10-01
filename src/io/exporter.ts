@@ -88,6 +88,19 @@ function paint(
   ctx.save()
   ctx.globalAlpha = el.opacity
   switch (el.kind) {
+    case 'section': {
+      const h = Math.min(el.h, 34)
+      ctx.fillStyle = 'rgba(255,255,255,0.72)'
+      roundRect(ctx, el.x, el.y, el.w, el.h, 14)
+      ctx.fill()
+      ctx.fillStyle = el.accent
+      ctx.fillRect(el.x, el.y, el.w, h)
+      ctx.fillStyle = '#fff'
+      ctx.font = '600 15px system-ui, sans-serif'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(el.title, el.x + 14, el.y + h / 2, el.w - 28)
+      break
+    }
     case 'stroke': {
       const st = el.style
       ctx.globalCompositeOperation = st.blend as GlobalCompositeOperation
@@ -281,9 +294,29 @@ export function exportSVG(doc: DocumentState, opts: Partial<ExportOptions> = {})
   downloadBlob(new Blob([parts.join('\n')], { type: 'image/svg+xml' }), `${slug(doc.meta.title)}.svg`)
 }
 
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2))
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
+}
+
 function svgElement(el: AnyElement): string {
   const op = f(el.opacity)
   switch (el.kind) {
+    case 'section': {
+      const h = Math.min(el.h, 34)
+      const body = `<rect x="${f(el.x)}" y="${f(el.y)}" width="${f(el.w)}" height="${f(el.h)}" rx="14" fill="rgba(255,255,255,0.72)"/>`
+      const band = `<rect x="${f(el.x)}" y="${f(el.y)}" width="${f(el.w)}" height="${f(h)}" fill="${el.accent}"/>`
+      const label = el.title
+        ? `<text x="${f(el.x + 14)}" y="${f(el.y + h / 2 + 5)}" font-family="system-ui,sans-serif" font-size="15" font-weight="600" fill="#fff">${escapeXml(el.title)}</text>`
+        : ''
+      return `<g${op}>${body}${band}${label}</g>`
+    }
     case 'stroke': {
       const s = el.style
       if (s.blend === 'destination-out') return ''

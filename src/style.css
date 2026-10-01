@@ -1304,3 +1304,163 @@ body[data-theme='dark'] .switch.on {
   color: var(--text-2);
   box-shadow: 0 1px 0 var(--line-strong);
 }
+
+/* ---- appended from src/ui/style.css, which was never imported ---- */
+
+/* ---- paper style swatches (board panel) ---- */
+.paper-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.paper-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.paper-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.paper-chip.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.paper-chip span {
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+}
+.paper-thumb {
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+  background: #fff;
+  color: #c3c9d4;
+}
+.paper-chip.is-active .paper-thumb {
+  color: currentColor;
+}
+
+/* ---------------------------------------------------------------- toasts */
+
+.toast-host {
+  position: fixed;
+  left: calc(var(--rail-w) + 16px);
+  bottom: calc(var(--status-h) + 16px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px 9px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(12px);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+  animation: toast-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.toast.is-out {
+  animation: toast-out 0.2s ease forwards;
+}
+.toast-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.toast-ok .toast-dot {
+  background: var(--ok);
+}
+.toast-warn .toast-dot {
+  background: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+/* ------------------------------------------------- motion and focus polish */
+
+/* Keyboard users need to see where they are; the browser default ring clashes
+   with the accent, so it is replaced rather than removed. */
+:where(button, [role='button'], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:where(button, [role='button']):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Panel sections open and close by height, which reads as a change rather
+   than a jump. Height is animated rather than max-height so the timing stays
+   honest when the content is tall. */
+.sect-body {
+  overflow: hidden;
+}
+.sect.collapsed .sect-body {
+  display: none;
+}
+
+.btn,
+.rail-btn,
+.chip,
+.bg-chip {
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.08s ease;
+}
+.btn:active,
+.rail-btn:active,
+.chip:active,
+.bg-chip:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -9,6 +9,7 @@ const CATEGORY_ORDER: { key: string; label: string; hint: string }[] = [
   { key: 'freehand', label: 'Draw', hint: 'Pressure-sensitive. The further you press, the thicker the line.' },
   { key: 'shape', label: 'Shapes', hint: 'Drag to draw · Shift constrains the angle or aspect' },
   { key: 'text', label: 'Text', hint: 'Click to place a text box' },
+  { key: 'section', label: 'Sections', hint: 'Drag to draw a section — whatever falls inside joins it, and drawing one inside another makes a sub-section · click a title band to fold it' },
   { key: 'note', label: 'Notes', hint: 'Click for a square note, or drag for a custom size' },
   { key: 'image', label: 'Image', hint: 'Insert a picture from your computer, or paste from the clipboard' },
   { key: 'eraser', label: 'Eraser', hint: 'Ink eraser removes pixels · Whole-object eraser removes the entire stroke' },
